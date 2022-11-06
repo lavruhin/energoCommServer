@@ -1,6 +1,99 @@
-import socket
-import sys
-import time
+import asyncio
+
+
+clients = dict()
+points = {b"!014017\r": "Sta01", b"!024017\r": "Sta02", b"!034017\r": "Loco01", b"!044017\r": "Loco02"}
+commands_get_data = {"Sta01": "#01\r", "Sta02": "#02\r", "Loco01": "#03\r", "Loco02": "#04\r"}
+
+
+async def handle_connection(reader, writer):
+    addr = writer.get_extra_info("peername")
+    print("Connected by", addr)
+    while True:
+        # Register a client in the list
+        if addr not in clients:
+            # Request to detect who is it
+            for request_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
+                print(f"Send to {addr}: {request_data}")
+                try:
+                    writer.write(request_data.encode())
+                    await writer.drain()
+                except ConnectionError:
+                    print(f"Client suddenly closed, cannot send")
+                    break
+                await asyncio.sleep(2)
+            # Listen to an answer
+            try:
+                received_data = await reader.read(1024)
+            except ConnectionError:
+                print(f"Client suddenly closed while receiving from {addr}")
+                break
+            print(f"Received from {addr}: {received_data}")
+            if received_data in points:
+                clients[addr] = points[received_data]
+        if addr in clients:
+            # Request measured data
+            request_data = commands_get_data[clients[addr]]
+            print(f"Send to {addr}: {request_data}")
+            try:
+                writer.write(request_data.encode())
+                await writer.drain()
+            except ConnectionError:
+                print(f"Client suddenly closed, cannot send")
+                break
+            # Listen to an answer
+            try:
+                received_data = await reader.read(1024)
+            except ConnectionError:
+                print(f"Client suddenly closed while receiving from {addr}")
+                break
+            # print(f"Received from {addr}: {received_data}")
+            try:
+                value_u1 = float(received_data[1:8].decode())
+                value_u2 = float(received_data[8:15].decode())
+                value_i1 = float(received_data[15:22].decode())
+                value_i2 = float(received_data[22:29].decode())
+                print(f"{clients[addr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}")
+            except (UnicodeError, ValueError):
+                print('Value Error')
+            await asyncio.sleep(4)
+        # try:
+        #     received_data = await reader.read(1024)
+        # except ConnectionError:
+        #     print(f"Client suddenly closed while receiving from {addr}")
+        #     break
+        # print(f"Received from {addr}: {received_data}")
+        # if not received_data:
+        #     break
+        # # Process
+        # if received_data == b"close":
+        #     break
+
+
+        # data = data.upper()
+        # Send
+        # print(f"Send: {data} to: {addr}")
+        # try:
+        #     writer.write(data)  # New
+        #     await writer.drain()
+        # except ConnectionError:
+        #     print(f"Client suddenly closed, cannot send")
+        #     break
+    writer.close()
+    print("Disconnected by", addr)
+
+
+async def main(host, port):
+    server = await asyncio.start_server(handle_connection, host, port)
+    print(f"Start server...")
+    async with server:
+        await server.serve_forever()
+
+HOST = "192.168.1.11"
+PORT = 10001
+
+if __name__ == "__main__":
+    asyncio.run(main(HOST, PORT))
 
 
 def parse(receivedString):
@@ -43,57 +136,45 @@ def packAnswerSmart(head, answerBody):
     return answerHead + answerBody
 
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = ('192.168.1.11', 10001)
-print('Server {} starts, port {}'.format(*server_address))
-sock.bind(server_address)
-sock.listen(1)
-
-while True:
-    print('Waiting for connection...')
-    connection, client_address = sock.accept()
-    try:
-        print('Connected to:', client_address)
-        while True:
-            #           data = connection.recv(16)
-            #           print(f'Received: {data.decode()}')
-            #           if data:
-            #               print('Processing...')
-            #               data = data.upper()
-            #               print('Request.')
-            #               connection.sendall(data)
-            #           else:
-            #               print('Data message is empty from:', client_address)
-            #               break
-            data = "#01\r"
-            print(data)
-            # connection.sendall(data.encode())
-            time.sleep(1)
-            receivedStr = connection.recv(1000)
-            print(f'Received: {receivedStr.hex()}')
-            print(f'Received: {receivedStr.decode("cp1251")}')
-
-            (packetType, answerStr) = parse(receivedStr)
-            if answerStr != b'\x00':
-                connection.sendall(answerStr)
-                print(packetType)
-                print(f'Send:     {answerStr.hex()}')
-                print(f'Send:     {answerStr.decode("cp1251")}')
-
-            #            print([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]])
-            #            if False:
-            #                print([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9],
-            #                       data[10], data[11], data[12], data[13], data[14], data[15], data[16], data[17], data[18], data[19],
-            #                       data[20], data[21], data[22], data[23], data[24], data[25], data[26], data[27], data[28], data[29],
-            #                       data[30], data[31], data[32], data[33], data[34], data[35], data[36], data[37], data[38], data[39],
-            #                       data[40], data[41], data[42], data[43], data[44], data[45], data[46], data[47], data[48], data[49],
-            #                       data[50], data[51], data[52], data[43], data[54], data[55], data[56]])
-            #print(f'Received: {data.hex()}')
-            #print(f'Received: {data.decode()}')
-            #data = data[0:4] + data[8:12] + data[4:8] + b'\x03\x00' + b'\x45\x5e\x2a\x3c\x53'
-            #print(f'Send:     {data.hex()}')
-            #print(f'Send:     {data.decode()}')
-            #connection.sendall(data)
-
-    finally:
-        connection.close()
+# sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# server_address = ('192.168.1.11', 10001)
+# print('Server {} starts, port {}'.format(*server_address))
+# sock.bind(server_address)
+# sock.listen(1)
+#
+# while True:
+#     print('Waiting for connection...')
+#     connection, client_address = sock.accept()
+#     try:
+#         print('Connected to:', client_address)
+#         while True:
+#             requestStr = '#01\r'
+#             connection.sendall(requestStr.encode())
+#             print('Send: ' + requestStr)
+#             time.sleep(1)
+#             receivedStr = connection.recv(1000)
+#             print('Recv: ' + (receivedStr.decode()))
+#
+#
+#             # receivedStr = connection.recv(1000)
+#             # print(f'Received: {receivedStr.hex()}')
+#             # print(f'Received: {receivedStr.decode("cp1251")}')
+#             #
+#             # (packetType, answerStr) = parse(receivedStr)
+#             # if answerStr != b'\x00':
+#             #     connection.sendall(answerStr)
+#             #     print(packetType)
+#             #     print(f'Send:     {answerStr.hex()}')
+#             #     print(f'Send:     {answerStr.decode("cp1251")}')
+#
+#             #            print([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]])
+#             #            if False:
+#             #                print([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9],
+#             #                       data[10], data[11], data[12], data[13], data[14], data[15], data[16], data[17], data[18], data[19],
+#             #                       data[20], data[21], data[22], data[23], data[24], data[25], data[26], data[27], data[28], data[29],
+#             #                       data[30], data[31], data[32], data[33], data[34], data[35], data[36], data[37], data[38], data[39],
+#             #                       data[40], data[41], data[42], data[43], data[44], data[45], data[46], data[47], data[48], data[49],
+#             #                       data[50], data[51], data[52], data[43], data[54], data[55], data[56]])
+#
+#     finally:
+#         connection.close()
