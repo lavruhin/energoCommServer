@@ -1,9 +1,19 @@
 import asyncio
-
+import queue
 
 clients = dict()
-points = {b"!014017\r": "Sta01", b"!024017\r": "Sta02", b"!034017\r": "Loco01", b"!044017\r": "Loco02"}
-commands_get_data = {"Sta01": "#01\r", "Sta02": "#02\r", "Loco01": "#03\r", "Loco02": "#04\r"}
+points = \
+    {b"!014017\r": "Sta01",
+     b"!024017\r": "Sta02",
+     b"!034017\r": "Loco01",
+     b"!044017\r": "Loco02",
+     b"ECHO\r": "Echo client"}
+command_get_data = \
+    {"Sta01": "#01\r",
+     "Sta02": "#02\r",
+     "Loco01": "#03\r",
+     "Loco02": "#04\r"}
+mirrors_queues = dict()
 
 
 async def handle_connection(reader, writer):
@@ -11,7 +21,7 @@ async def handle_connection(reader, writer):
     print("Connected by", addr)
     while True:
         # Register a client in the list
-        if addr not in clients:
+        if addr not in (clients, mirrors_queues):
             # Request to detect who is it
             for request_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
                 print(f"Send to {addr}: {request_data}")
@@ -29,11 +39,15 @@ async def handle_connection(reader, writer):
                 print(f"Client suddenly closed while receiving from {addr}")
                 break
             print(f"Received from {addr}: {received_data}")
-            if received_data in points:
+            # Answer from echo mirror
+            if received_data == b'ECHO':
+                mirrors_queues[addr] = queue.Queue(20)
+            # Answer from measurer
+            elif received_data in points:
                 clients[addr] = points[received_data]
         if addr in clients:
             # Request measured data
-            request_data = commands_get_data[clients[addr]]
+            request_data = command_get_data[clients[addr]]
             print(f"Send to {addr}: {request_data}")
             try:
                 writer.write(request_data.encode())
@@ -48,15 +62,31 @@ async def handle_connection(reader, writer):
                 print(f"Client suddenly closed while receiving from {addr}")
                 break
             # print(f"Received from {addr}: {received_data}")
+            # Parse measured data
             try:
                 value_u1 = float(received_data[1:8].decode())
                 value_u2 = float(received_data[8:15].decode())
                 value_i1 = float(received_data[15:22].decode())
                 value_i2 = float(received_data[22:29].decode())
-                print(f"{clients[addr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}")
+                measures = f"{clients[addr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
+                print(measures)
+                for key in mirrors_queues:
+                    mirrors_queues[key].put(measures)
+                    print(f"Put {measures} to mirror")
             except (UnicodeError, ValueError):
                 print('Value Error')
             await asyncio.sleep(4)
+        if addr in mirrors_queues:
+            try:
+                while not mirrors_queues[addr].empty():
+                    data = mirrors_queues[addr].get()
+                    print(f"Get {data} from mirror")
+                    writer.write(data.encode())
+                    await writer.drain()
+            except ConnectionError:
+                print(f"Client suddenly closed, cannot send")
+                break
+
         # try:
         #     received_data = await reader.read(1024)
         # except ConnectionError:
@@ -68,7 +98,6 @@ async def handle_connection(reader, writer):
         # # Process
         # if received_data == b"close":
         #     break
-
 
         # data = data.upper()
         # Send
@@ -88,6 +117,7 @@ async def main(host, port):
     print(f"Start server...")
     async with server:
         await server.serve_forever()
+
 
 HOST = "192.168.1.11"
 PORT = 10001
@@ -134,7 +164,6 @@ def packAnswerSmart(head, answerBody):
         checksumHead ^= el
     answerHead += checksumHead.to_bytes(1, 'little')
     return answerHead + answerBody
-
 
 # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # server_address = ('192.168.1.11', 10001)
