@@ -21,7 +21,7 @@ async def handle_connection(reader, writer):
     print("Connected by", addr)
     while True:
         # Register a client in the list
-        if addr not in (clients, mirrors_queues):
+        if addr not in clients and addr not in mirrors_queues:
             # Request to detect who is it
             for request_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
                 print(f"Send to {addr}: {request_data}")
@@ -119,7 +119,7 @@ async def main(host, port):
         await server.serve_forever()
 
 
-HOST = "192.168.1.11"
+HOST = "192.168.1.10"
 PORT = 10001
 
 if __name__ == "__main__":
