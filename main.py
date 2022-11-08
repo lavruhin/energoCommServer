@@ -1,5 +1,8 @@
 import asyncio
 import queue
+import time
+
+REQ_PERIOD = 5.0
 
 clients = dict()
 points = \
@@ -17,14 +20,15 @@ mirrors_queues = dict()
 
 
 async def handle_connection(reader, writer):
-    addr = writer.get_extra_info("peername")
-    print("Connected by", addr)
+    last_req_time = time.time()
+    adr = writer.get_extra_info("peername")
+    print("Connected by", adr)
     while True:
         # Register a client in the list
-        if addr not in clients and addr not in mirrors_queues:
+        if adr not in clients and adr not in mirrors_queues:
             # Request to detect who is it
             for request_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
-                print(f"Send to {addr}: {request_data}")
+                print(f"Send to {adr}: {request_data}")
                 try:
                     writer.write(request_data.encode())
                     await writer.drain()
@@ -36,19 +40,24 @@ async def handle_connection(reader, writer):
             try:
                 received_data = await reader.read(1024)
             except ConnectionError:
-                print(f"Client suddenly closed while receiving from {addr}")
+                print(f"Client suddenly closed while receiving from {adr}")
                 break
-            print(f"Received from {addr}: {received_data}")
+            print(f"Received from {adr}: {received_data}")
             # Answer from echo mirror
             if received_data == b'ECHO':
-                mirrors_queues[addr] = queue.Queue(20)
+                mirrors_queues[adr] = queue.Queue(20)
             # Answer from measurer
             elif received_data in points:
-                clients[addr] = points[received_data]
-        if addr in clients:
+                clients[adr] = points[received_data]
+                last_req_time = time.time()
+        if adr in clients:
+            # Wait for request period
+            while time.time() - last_req_time < REQ_PERIOD - 0.1:
+                await asyncio.sleep(0.2)
+            last_req_time = last_req_time + REQ_PERIOD
             # Request measured data
-            request_data = command_get_data[clients[addr]]
-            print(f"Send to {addr}: {request_data}")
+            request_data = command_get_data[clients[adr]]
+            print(f"Send to {adr}: {request_data}")
             try:
                 writer.write(request_data.encode())
                 await writer.drain()
@@ -59,7 +68,7 @@ async def handle_connection(reader, writer):
             try:
                 received_data = await reader.read(1024)
             except ConnectionError:
-                print(f"Client suddenly closed while receiving from {addr}")
+                print(f"Client suddenly closed while receiving from {adr}")
                 break
             # print(f"Received from {addr}: {received_data}")
             # Parse measured data
@@ -68,18 +77,17 @@ async def handle_connection(reader, writer):
                 value_u2 = float(received_data[8:15].decode())
                 value_i1 = float(received_data[15:22].decode())
                 value_i2 = float(received_data[22:29].decode())
-                measures = f"{clients[addr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
+                measures = f"{clients[adr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
                 print(measures)
                 for key in mirrors_queues:
                     mirrors_queues[key].put(measures)
                     print(f"Put {measures} to mirror")
             except (UnicodeError, ValueError):
                 print('Value Error')
-            await asyncio.sleep(4)
-        if addr in mirrors_queues:
+        if adr in mirrors_queues:
             try:
-                while not mirrors_queues[addr].empty():
-                    data = mirrors_queues[addr].get()
+                while not mirrors_queues[adr].empty():
+                    data = mirrors_queues[adr].get()
                     print(f"Get {data} from mirror")
                     writer.write(data.encode())
                     await writer.drain()
@@ -109,7 +117,7 @@ async def handle_connection(reader, writer):
         #     print(f"Client suddenly closed, cannot send")
         #     break
     writer.close()
-    print("Disconnected by", addr)
+    print("Disconnected by", adr)
 
 
 async def main(host, port):
