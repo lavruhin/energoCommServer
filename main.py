@@ -78,6 +78,12 @@ async def handle_connection(reader, writer):
                 value_i1 = float(received_data[15:22].decode())
                 value_i2 = float(received_data[22:29].decode())
                 measures = f"{clients[adr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
+                rec_arr = received_data.decode().split(' ')
+                if len(rec_arr) == 6:
+                    gps_data = ""
+                    for item in rec_arr[1:7]:
+                        gps_data = gps_data + " " + item
+                    measures = gps_data + measures
                 print(measures)
                 for key in mirrors_queues:
                     mirrors_queues[key].put(measures)
@@ -121,7 +127,7 @@ async def handle_connection(reader, writer):
 
 
 async def main(host, port):
-    server = await asyncio.start_server(handle_connection, host, port)
+    server = await asyncio.open_connection().start_server(handle_connection, host, port)
     print(f"Start server...")
     async with server:
         await server.serve_forever()
