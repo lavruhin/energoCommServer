@@ -2,7 +2,6 @@ import asyncio
 import queue
 import time
 
-REQ_PERIOD = 5.0
 
 clients = dict()
 points = \
@@ -127,7 +126,7 @@ async def handle_connection(reader, writer):
 
 
 async def main(host, port):
-    server = await asyncio.open_connection().start_server(handle_connection, host, port)
+    server = await asyncio.start_server(handle_connection, host, port)
     print(f"Start server...")
     async with server:
         await server.serve_forever()
@@ -135,6 +134,7 @@ async def main(host, port):
 
 HOST = "192.168.1.10"
 PORT = 10001
+REQ_PERIOD = 5.0
 
 if __name__ == "__main__":
     asyncio.run(main(HOST, PORT))
