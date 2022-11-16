@@ -53,7 +53,7 @@ async def handle_connection(reader, writer):
             # Wait for request period
             while time.time() - last_req_time < SYNC_PERIOD - 0.1:
                 await asyncio.sleep(0.2)
-            last_req_time = last_req_time + SYNC_PERIOD
+            last_req_time = time.time() #last_req_time + SYNC_PERIOD
             # Request measured data
             request_data = command_get_data[clients[adr]]
             print(f"Send to {adr}: {request_data}")
