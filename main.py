@@ -51,9 +51,9 @@ async def handle_connection(reader, writer):
                 last_req_time = time.time()
         if adr in clients:
             # Wait for request period
-            while time.time() - last_req_time < REQ_PERIOD - 0.1:
+            while time.time() - last_req_time < SYNC_PERIOD - 0.1:
                 await asyncio.sleep(0.2)
-            last_req_time = last_req_time + REQ_PERIOD
+            last_req_time = last_req_time + SYNC_PERIOD
             # Request measured data
             request_data = command_get_data[clients[adr]]
             print(f"Send to {adr}: {request_data}")
@@ -72,21 +72,22 @@ async def handle_connection(reader, writer):
             # print(f"Received from {addr}: {received_data}")
             # Parse measured data
             try:
-                value_u1 = float(received_data[1:8].decode())
-                value_u2 = float(received_data[8:15].decode())
-                value_i1 = float(received_data[15:22].decode())
-                value_i2 = float(received_data[22:29].decode())
-                measures = f"{clients[adr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
-                rec_arr = received_data.decode().split(' ')
-                if len(rec_arr) == 6:
-                    gps_data = ""
-                    for item in rec_arr[1:7]:
-                        gps_data = gps_data + " " + item
-                    measures = gps_data + measures
-                print(measures)
-                for key in mirrors_queues:
-                    mirrors_queues[key].put(measures)
-                    print(f"Put {measures} to mirror")
+                print(f"Received from {clients[adr]}: {received_data.decode()}")
+                # value_u1 = float(received_data[1:8].decode())
+                # value_u2 = float(received_data[8:15].decode())
+                # value_i1 = float(received_data[15:22].decode())
+                # value_i2 = float(received_data[22:29].decode())
+                # measures = f"{clients[adr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
+                # rec_arr = received_data.decode().split(' ')
+                # if len(rec_arr) == 6:
+                #     gps_data = ""
+                #     for item in rec_arr[1:7]:
+                #         gps_data = gps_data + " " + item
+                #     measures = gps_data + measures
+                # print(measures)
+                # for key in mirrors_queues:
+                #     mirrors_queues[key].put(measures)
+                #     print(f"Put {measures} to mirror")
             except (UnicodeError, ValueError):
                 print('Value Error')
         if adr in mirrors_queues:
@@ -134,7 +135,7 @@ async def main(host, port):
 
 HOST = "192.168.1.10"
 PORT = 10001
-REQ_PERIOD = 5.0
+SYNC_PERIOD = 2.0
 
 if __name__ == "__main__":
     asyncio.run(main(HOST, PORT))
