@@ -67,12 +67,12 @@ async def handle_connection(reader, writer):
                 break
             # Listen to an answer
             try:
-                received_data = await asyncio.wait_for(reader.read(1024), timeout=0.5)
+                received_data = await asyncio.wait_for(reader.read(1024), timeout=10)
             except ConnectionError:
                 print("Client suddenly closed")
                 del clients[adr]
                 break
-            except asyncio.exceptions.CancelledError:
+            except (asyncio.exceptions.CancelledError, TimeoutError):
                 print("TIMEOUT!")
                 del clients[adr]
                 break
