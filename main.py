@@ -72,8 +72,10 @@ async def handle_connection(reader, writer):
                 print("Client suddenly closed")
                 del clients[adr]
                 break
-            except TimeoutError:
+            except asyncio.exceptions.CancelledError:
                 print("TIMEOUT!")
+                del clients[adr]
+                break
             # Parse measured data
             try:
                 print(f"Received from {clients[adr]}: {received_data.decode()}")
