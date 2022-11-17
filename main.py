@@ -19,22 +19,23 @@ mirrors_queues = dict()
 
 
 async def handle_connection(reader, writer):
-    last_req_time = time.time()
+    global clients
+    last_sync_time = time.time()
     adr = writer.get_extra_info("peername")
     print("Connected by", adr)
     while True:
         # Register a client in the list
         if adr not in clients and adr not in mirrors_queues:
             # Request to detect who is it
-            for request_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
-                print(f"Send to {adr}: {request_data}")
+            for sync_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
+                print(f"Send to {adr}: {sync_data}")
                 try:
-                    writer.write(request_data.encode())
+                    writer.write(sync_data.encode())
                     await writer.drain()
                 except ConnectionError:
                     print(f"Client suddenly closed, cannot send")
                     break
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
             # Listen to an answer
             try:
                 received_data = await reader.read(1024)
@@ -48,28 +49,32 @@ async def handle_connection(reader, writer):
             # Answer from measurer
             elif received_data in points:
                 clients[adr] = points[received_data]
-                last_req_time = time.time()
+                last_sync_time = time.time()
         if adr in clients:
-            # Wait for request period
-            while time.time() - last_req_time < SYNC_PERIOD - 0.1:
+            # Wait for sync period
+            while time.time() - last_sync_time < SYNC_PERIOD - 0.1:
                 await asyncio.sleep(0.2)
-            last_req_time = time.time() #last_req_time + SYNC_PERIOD
-            # Request measured data
-            request_data = command_get_data[clients[adr]]
-            print(f"Send to {adr}: {request_data}")
+            last_sync_time = time.time() #last_sync_time + SYNC_PERIOD
+            # Send sync to the client
+            sync_data = command_get_data[clients[adr]]
+            # print(f"Send to {adr}: {sync_data}")
             try:
-                writer.write(request_data.encode())
+                writer.write(sync_data.encode())
                 await writer.drain()
             except ConnectionError:
-                print(f"Client suddenly closed, cannot send")
+                print("Client suddenly closed")
+                del clients[adr]
                 break
             # Listen to an answer
             try:
-                received_data = await reader.read(1024)
+                async with asyncio.timeout(0.5):
+                    received_data = await reader.read(1024)
             except ConnectionError:
-                print(f"Client suddenly closed while receiving from {adr}")
+                print("Client suddenly closed")
+                del clients[adr]
                 break
-            # print(f"Received from {addr}: {received_data}")
+            except TimeoutError:
+                print("Timeout")
             # Parse measured data
             try:
                 print(f"Received from {clients[adr]}: {received_data.decode()}")
