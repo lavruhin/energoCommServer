@@ -147,7 +147,7 @@ async def main(host, port):
         await server.serve_forever()
 
 
-HOST = "localhost" #"192.168.1.10"
+HOST = "192.168.1.10"
 PORT = 10001
 SYNC_PERIOD = 2.0
 
