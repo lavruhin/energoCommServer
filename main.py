@@ -1,6 +1,7 @@
 import asyncio
 import queue
 import time
+import threading
 
 
 clients = dict()
@@ -23,9 +24,10 @@ async def handle_connection(reader, writer):
     last_sync_time = time.time()
     adr = writer.get_extra_info("peername")
     print("Connected by", adr)
+    timeout_cnt = 0
     while True:
         # Register a client in the list
-        if adr not in clients and adr not in mirrors_queues:
+        if adr not in clients: # and adr not in mirrors_queues:
             # Request to detect who is it
             for sync_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
                 print(f"Send to {adr}: {sync_data}")
@@ -51,51 +53,47 @@ async def handle_connection(reader, writer):
                 clients[adr] = points[received_data]
                 last_sync_time = time.time()
         if adr in clients:
-            # Wait for sync period
-            while time.time() - last_sync_time < SYNC_PERIOD - 0.1:
-                await asyncio.sleep(0.2)
-            last_sync_time = time.time() #last_sync_time + SYNC_PERIOD
             # Send sync to the client
-            sync_data = command_get_data[clients[adr]]
-            # print(f"Send to {adr}: {sync_data}")
-            try:
-                writer.write(sync_data.encode())
-                await writer.drain()
-            except ConnectionError:
-                print("Client suddenly closed")
-                del clients[adr]
-                break
+            if time.time() - last_sync_time > SYNC_PERIOD:
+                last_sync_time = time.time()
+                sync_data = command_get_data[clients[adr]]
+                try:
+                    print("Send request")
+                    writer.write(sync_data.encode())
+                    await writer.drain()
+                except ConnectionError:
+                    print("Disconnect during sending")
+                    del clients[adr]
+                    break
             # Listen to an answer
             try:
-                received_data = await asyncio.wait_for(reader.read(1024), timeout=10)
-            except ConnectionError:
-                print("Client suddenly closed")
+                received_data = await asyncio.wait_for(reader.read(1024), timeout=2)
+                # Parse measured data
+                try:
+                    print(f"Received from {clients[adr]}: {received_data.decode()}")
+                    # value_u1 = float(received_data[1:8].decode())
+                    # value_u2 = float(received_data[8:15].decode())
+                    # value_i1 = float(received_data[15:22].decode())
+                    # value_i2 = float(received_data[22:29].decode())
+                    # measures = f"{clients[adr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
+                    # rec_arr = received_data.decode().split(' ')
+                    # if len(rec_arr) == 6:
+                    #     gps_data = ""
+                    #     for item in rec_arr[1:7]:
+                    #         gps_data = gps_data + " " + item
+                    #     measures = gps_data + measures
+                    # print(measures)
+                    # for key in mirrors_queues:
+                    #     mirrors_queues[key].put(measures)
+                    #     print(f"Put {measures} to mirror")
+                except (UnicodeError, ValueError):
+                    print('Value Error')
+            except (ConnectionError, asyncio.TimeoutError):
+                timeout_cnt += 1
+            if timeout_cnt >= 5:
+                print("Disconnect by timeout")
                 del clients[adr]
                 break
-            except (asyncio.exceptions.CancelledError, TimeoutError):
-                print("TIMEOUT!")
-                del clients[adr]
-                break
-            # Parse measured data
-            try:
-                print(f"Received from {clients[adr]}: {received_data.decode()}")
-                # value_u1 = float(received_data[1:8].decode())
-                # value_u2 = float(received_data[8:15].decode())
-                # value_i1 = float(received_data[15:22].decode())
-                # value_i2 = float(received_data[22:29].decode())
-                # measures = f"{clients[adr]}:  U1 = {value_u1}  U2 = {value_u2}  I1 = {value_i1}  I2 = {value_i2}"
-                # rec_arr = received_data.decode().split(' ')
-                # if len(rec_arr) == 6:
-                #     gps_data = ""
-                #     for item in rec_arr[1:7]:
-                #         gps_data = gps_data + " " + item
-                #     measures = gps_data + measures
-                # print(measures)
-                # for key in mirrors_queues:
-                #     mirrors_queues[key].put(measures)
-                #     print(f"Put {measures} to mirror")
-            except (UnicodeError, ValueError):
-                print('Value Error')
         if adr in mirrors_queues:
             try:
                 while not mirrors_queues[adr].empty():
@@ -132,14 +130,24 @@ async def handle_connection(reader, writer):
     print("Disconnected by", adr)
 
 
+# class CommSrvProtocol(asyncio.Protocol):
+
+
 async def main(host, port):
+    # loop = asyncio.get_running_loop()
+    # on_con_lost = loop.create_future()
+    # transport, protocol = await loop.create_connection(lambda: CommSrvProtocol(on_con_lost), host, port)
+    # try:
+    #     await on_con_lost
+    # finally:
+    #     transport.close()
     server = await asyncio.start_server(handle_connection, host, port)
     print(f"Start server...")
     async with server:
         await server.serve_forever()
 
 
-HOST = "192.168.1.10"
+HOST = "localhost" #"192.168.1.10"
 PORT = 10001
 SYNC_PERIOD = 2.0
 
