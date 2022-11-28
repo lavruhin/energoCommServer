@@ -29,6 +29,7 @@ async def handle_connection(reader, writer):
     print("Connected by", adr)
     timeout_cnt = 0
     point_number = 0
+    tail = ""
     while True:
         # Register a client in the list
         if adr not in clients: # and adr not in mirrors_queues:
@@ -45,7 +46,7 @@ async def handle_connection(reader, writer):
             # Listen to an answer
             try:
                 received_data = await asyncio.wait_for(reader.read(1024), timeout=5)
-            except ConnectionError:
+            except (ConnectionError, OSError):
                 print(f"Client suddenly closed while receiving from {adr}")
                 break
             except asyncio.TimeoutError:
@@ -62,7 +63,6 @@ async def handle_connection(reader, writer):
         elif adr in clients:
             sync_data = command_get_data[clients[adr]]
             try:
-                print("Send request")
                 writer.write(sync_data.encode())
                 await writer.drain()
             except ConnectionError:
@@ -72,21 +72,26 @@ async def handle_connection(reader, writer):
             # Listen to an answer
             try:
                 received_data = await asyncio.wait_for(reader.read(1024), timeout=10)
-                try:
-                    print(f"Received from {clients[adr]}: {received_data.decode()}")
-                    # for key in mirrors_queues:
-                    #     mirrors_queues[key].put(measures)
-                    #     print(f"Put {measures} to mirror")
-                except (UnicodeError, ValueError):
-                    print('Value Error')
+                received_msgs = received_data.split(b'\n')
+                if tail != "":
+                    received_msgs[0] = tail + received_msgs[0]
+                    tail = ""
+                if received_data[-1] != 13:
+                    tail = received_msgs[-1]
+                    received_msgs.pop(-1)
                 dt = datetime.datetime.now()
                 filename = f"{PATH}\\{point_number:02}_{dt.year:04}_{dt.month:02}_{dt.day:02}.csv"
                 if not os.path.isfile(filename):
                     with open(filename, mode="w") as file:
                         file.write("Объект; Дата; Время; Напряжение; Ток-1; Ток-2; Широта; Долгота; Скорость\n")
-                with open(filename, mode="a") as file:
-                    file.write(received_data.decode())
-                # Parse measured data
+                for message in received_msgs:
+                    try:
+                        message_str = message.decode()
+                        print(f"Received from {clients[adr]}: {message_str}")
+                        with open(filename, mode="a") as file:
+                            file.write(message_str + '\r')
+                    except (UnicodeError, ValueError):
+                        print('Value Error in received data')
             except (ConnectionError, asyncio.TimeoutError):
                 timeout_cnt += 1
             if timeout_cnt >= 2:
