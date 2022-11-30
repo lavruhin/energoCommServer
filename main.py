@@ -63,9 +63,12 @@ async def handle_connection(reader, writer):
                 clients[adr] = points[received_data][1]
         elif adr in clients:
             dt = datetime.datetime.now()
+            del_list = []
             for key in current_data:
                 if dt - datetime.timedelta(seconds=10) > key:
-                    del current_data[key]
+                    del_list.append(key)
+            for key in del_list:
+                del current_data[key]
             sync_data = command_get_data[clients[adr]]
             try:
                 last_k = None
