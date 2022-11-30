@@ -86,7 +86,7 @@ async def handle_connection(reader, writer):
                 data_to_send = sync_data
                 if last_k is not None:
                     data_to_send += last_v["Sta01"] + last_v["Sta02"] + last_v["Loco01"] + last_v["Loco02"]
-                    print("LAST: {str(last_k)}")
+                    print(f"LAST: {str(last_k)}")
                 writer.write(data_to_send.encode())
                 await writer.drain()
             except ConnectionError:
