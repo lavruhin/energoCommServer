@@ -68,16 +68,20 @@ async def handle_connection(reader, writer):
                     del current_data[key]
             sync_data = command_get_data[clients[adr]]
             try:
-                last = None
+                last_k = None
+                last_v = None
                 if len(current_data) > 0:
                     for key, value in current_data:
-                        if last is None & (value["num"] == 4):
-                            last = [key, value]
-                        if key > last[0] & (value["num"] == 4):
-                            last = [key, value]
+                        if last_k is None & (value["num"] == 4):
+                            last_k = key
+                            last_v = value
+                        if key > last_k & (value["num"] == 4):
+                            last_k = key
+                            last_v = value
                 data_to_send = sync_data
-                if last is not None:
-                    data_to_send += last["Sta01"] + last["Sta02"] + last["Loco01"] + last["Loco02"]
+                if last_k is not None:
+                    data_to_send += last_v["Sta01"] + last_v["Sta02"] + last_v["Loco01"] + last_v["Loco02"]
+                    print("LAST: {str(last_k)}")
                 writer.write(data_to_send.encode())
                 await writer.drain()
             except ConnectionError:
@@ -107,8 +111,8 @@ async def handle_connection(reader, writer):
                             file.write(message_str + '\r')
                         date = message_str.split(';')[1].split('-')
                         time = message_str.split(';')[2].split(':')
-                        dt = datetime.datetime(year=date[0], month=date[1], day=date[2],
-                                               hour=time[0], minute=time[1], second=time[2])
+                        dt = datetime.datetime(year=int(date[0]), month=int(date[1]), day=int(date[2]),
+                                               hour=int(time[0]), minute=int(time[1]), second=int(time[2]))
                         if dt in current_data:
                             current_data[dt]["num"] += 1
                             current_data[dt][clients[adr]] = message_str
