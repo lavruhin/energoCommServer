@@ -105,17 +105,17 @@ async def handle_connection(reader, writer):
                         print(f"Received from {clients[adr]}: {message_str}")
                         with open(filename, mode="a") as file:
                             file.write(message_str + '\r')
-                        date = message.split(';')[1].split('-')
-                        time = message.split(';')[2].split(':')
+                        date = message_str.split(';')[1].split('-')
+                        time = message_str.split(';')[2].split(':')
                         dt = datetime.datetime(year=date[0], month=date[1], day=date[2],
                                                hour=time[0], minute=time[1], second=time[2])
                         if dt in current_data:
                             current_data[dt]["num"] += 1
-                            current_data[dt][clients[adr]] = message
+                            current_data[dt][clients[adr]] = message_str
                         else:
                             current_data[dt] = dict()
                             current_data[dt]["num"] = 1
-                            current_data[dt][clients[adr]] = message
+                            current_data[dt][clients[adr]] = message_str
                     except (UnicodeError, ValueError):
                         print('Value Error in received data')
             except (ConnectionError, asyncio.TimeoutError):
