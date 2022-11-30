@@ -68,8 +68,8 @@ async def handle_connection(reader, writer):
                     del current_data[key]
             sync_data = command_get_data[clients[adr]]
             try:
+                last = None
                 if len(current_data) > 0:
-                    last = None
                     for key, value in current_data:
                         if last is None & (value["num"] == 4):
                             last = [key, value]
