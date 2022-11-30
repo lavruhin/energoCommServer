@@ -76,12 +76,13 @@ async def handle_connection(reader, writer):
                 if len(current_data) > 0:
                     for key in current_data:
                         value = current_data[key]
-                        if (last_k is None) & (value["num"] == 4):
-                            last_k = key
-                            last_v = value
-                        if (key > last_k) & (value["num"] == 4):
-                            last_k = key
-                            last_v = value
+                        if value["num"] == 4:
+                            if last_k is None:
+                                last_k = key
+                                last_v = value
+                            if key > last_k:
+                                last_k = key
+                                last_v = value
                 data_to_send = sync_data
                 if last_k is not None:
                     data_to_send += last_v["Sta01"] + last_v["Sta02"] + last_v["Loco01"] + last_v["Loco02"]
