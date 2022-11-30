@@ -20,6 +20,7 @@ command_get_data = \
      "Sta02": "#02\r",
      "Loco01": "#03\r",
      "Loco02": "#04\r"}
+current_data = dict()
 mirrors_queues = dict()
 
 
@@ -61,9 +62,23 @@ async def handle_connection(reader, writer):
                 point_number = points[received_data][0]
                 clients[adr] = points[received_data][1]
         elif adr in clients:
+            dt = datetime.datetime.now()
+            for key, value in current_data:
+                if dt - datetime.timedelta(seconds=10) > key:
+                    del current_data[key]
             sync_data = command_get_data[clients[adr]]
             try:
-                writer.write(sync_data.encode())
+                if len(current_data) > 0:
+                    last = None
+                    for key, value in current_data:
+                        if last is None & (value["num"] == 4):
+                            last = [key, value]
+                        if key > last[0] & (value["num"] == 4):
+                            last = [key, value]
+                data_to_send = sync_data
+                if last is not None:
+                    data_to_send += last["Sta01"] + last["Sta02"] + last["Loco01"] + last["Loco02"]
+                writer.write(data_to_send.encode())
                 await writer.drain()
             except ConnectionError:
                 print("Disconnect during sending")
@@ -83,13 +98,24 @@ async def handle_connection(reader, writer):
                 filename = f"{PATH}\\{point_number:02}_{dt.year:04}_{dt.month:02}_{dt.day:02}.csv"
                 if not os.path.isfile(filename):
                     with open(filename, mode="w") as file:
-                        file.write("Объект; Дата; Время; Напряжение; Ток-1; Ток-2; Широта; Долгота; Скорость\n")
+                        file.write("Объект; Дата; Время; Напряжение; Ток-1; Ток-2; Широта; Долгота; Скорость; Расстояние\n")
                 for message in received_msgs:
                     try:
                         message_str = message.decode()
                         print(f"Received from {clients[adr]}: {message_str}")
                         with open(filename, mode="a") as file:
                             file.write(message_str + '\r')
+                        date = message.split(';')[1].split('-')
+                        time = message.split(';')[2].split(':')
+                        dt = datetime.datetime(year=date[0], month=date[1], day=date[2],
+                                               hour=time[0], minute=time[1], second=time[2])
+                        if dt in current_data:
+                            current_data[dt]["num"] += 1
+                            current_data[dt][clients[adr]] = message
+                        else:
+                            current_data[dt] = dict()
+                            current_data[dt]["num"] = 1
+                            current_data[dt][clients[adr]] = message
                     except (UnicodeError, ValueError):
                         print('Value Error in received data')
             except (ConnectionError, asyncio.TimeoutError):
