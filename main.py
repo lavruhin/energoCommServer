@@ -21,6 +21,7 @@ command_get_data = \
      "Loco02": "#04\r"}
 current_data = dict()
 mirrors_queues = dict()
+vals = [[0, 0, 0], [0, 0, 0], [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0]]
 
 
 async def handle_connection(reader, writer):
@@ -61,28 +62,37 @@ async def handle_connection(reader, writer):
                 point_number = points[received_data][0]
                 clients[adr] = points[received_data][1]
         elif adr in clients:
-            dt = datetime.datetime.now()
-            del_list = []
-            for key in current_data:
-                if dt - datetime.timedelta(seconds=10) > key:
-                    del_list.append(key)
-            for key in del_list:
-                del current_data[key]
+            # dt = datetime.datetime.now()
+            # del_list = []
+            # for key in current_data:
+            #     if dt - datetime.timedelta(seconds=10) > key:
+            #         del_list.append(key)
+            # for key in del_list:
+            #     del current_data[key]
             sync_data = command_get_data[clients[adr]]
             try:
-                last_k = None
-                last_v = None
-                if len(current_data) > 0:
-                    for key in current_data:
-                        value = current_data[key]
-                        if value["num"] == 4:
-                            if last_k is None:
-                                last_k = key
-                                last_v = value
-                            if key > last_k:
-                                last_k = key
-                                last_v = value
-                data_to_send = sync_data
+                # last_k = None
+                # last_v = None
+                # if len(current_data) > 0:
+                #     for key in current_data:
+                #         value = current_data[key]
+                #         if value["num"] == 4:
+                #             if last_k is None:
+                #                 last_k = key
+                #                 last_v = value
+                #             if key > last_k:
+                #                 last_k = key
+                #                 last_v = value
+                if clients[adr][0:3] == "Sta":
+                    data_to_send = sync_data
+                else:
+                    data_to_send = sync_data[0:3] + \
+                                   f" {vals[0][0]:6.0f} {vals[0][1]:6.2f} {vals[0][2]:6.2f}" + \
+                                   f" {vals[1][0]:6.0f} {vals[1][1]:6.2f} {vals[1][2]:6.2f}" + \
+                                   f" {vals[2][0]:6.0f} {vals[2][1]:6.2f} {vals[2][2]:6.2f}" + \
+                                   f" {vals[2][3]:6.0f} {vals[2][4]:6.2f} {vals[2][5]:6.4f} {vals[2][6]:6.4f}" + \
+                                   f" {vals[3][0]:6.0f} {vals[3][1]:6.2f} {vals[3][2]:6.2f}" + \
+                                   f" {vals[3][3]:6.0f} {vals[3][4]:6.2f} {vals[3][5]:6.2f} {vals[3][6]:6.4f} \r"
                 # if last_k is not None:
                 #     data_to_send += last_v["Sta01"] + last_v["Sta02"] + last_v["Loco01"] + last_v["Loco02"]
                 #     print(f"LAST: {str(last_k)}")
@@ -111,20 +121,35 @@ async def handle_connection(reader, writer):
                 for message in received_msgs:
                     try:
                         message_str = message.decode()
+                        message_vals = message_str.split(';')
                         print(f"Received from {clients[adr]}: {message_str}")
                         with open(filename, mode="a") as file:
                             file.write(message_str + '\r')
-                        date = message_str.split(';')[1].split('-')
-                        time = message_str.split(';')[2].split(':')
-                        dt = datetime.datetime(year=int(date[0]), month=int(date[1]), day=int(date[2]),
-                                               hour=int(time[0]), minute=int(time[1]), second=int(time[2]))
-                        if dt in current_data:
-                            current_data[dt]["num"] += 1
-                            current_data[dt][clients[adr]] = message_str
+                        if clients[adr] == "Sta01":
+                            point = 0
+                        elif clients[adr] == "Sta02":
+                            point = 1
+                        elif clients[adr] == "Loco01":
+                            point = 2
                         else:
-                            current_data[dt] = dict()
-                            current_data[dt]["num"] = 1
-                            current_data[dt][clients[adr]] = message_str
+                            point = 3
+                        if point <= 1:
+                            vals[point] = [float(message_vals[3]), float(message_vals[4]), float(message_vals[5])]
+                        else:
+                            vals[point] = [float(message_vals[3]), float(message_vals[4]), float(message_vals[5]),
+                                           float(message_vals[8]), float(message_vals[9]), float(message_vals[6]),
+                                           float(message_vals[7])]
+                        # date = message_vals[1].split('-')
+                        # time = message_vals[2].split(':')
+                        # dt = datetime.datetime(year=int(date[0]), month=int(date[1]), day=int(date[2]),
+                        #                        hour=int(time[0]), minute=int(time[1]), second=int(time[2]))
+                        # if dt in current_data:
+                        #     current_data[dt]["num"] += 1
+                        #     current_data[dt][clients[adr]] = message_str
+                        # else:
+                        #     current_data[dt] = dict()
+                        #     current_data[dt]["num"] = 1
+                        #     current_data[dt][clients[adr]] = message_str
                     except (UnicodeError, ValueError):
                         print('Value Error in received data')
             except (ConnectionError, asyncio.TimeoutError):
