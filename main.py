@@ -3,7 +3,6 @@ import queue
 import datetime
 import os
 
-
 HOST = "192.168.1.10"
 PORT = 10001
 PATH = "D:\\Work_Data\\EnergoCommData"
@@ -33,14 +32,14 @@ async def handle_connection(reader, writer):
     tail = ""
     while True:
         # Register a client in the list
-        if adr not in clients: # and adr not in mirrors_queues:
+        if adr not in clients:  # and adr not in mirrors_queues:
             # Request to detect who is it
             for sync_data in ["$01M\r", "$02M\r", "$03M\r", "$04M\r"]:
                 print(f"Send to {adr}: {sync_data}")
                 try:
                     writer.write(sync_data.encode())
                     await writer.drain()
-                except ConnectionError:
+                except (ConnectionError, OSError):
                     print(f"Client suddenly closed, cannot send")
                     break
                 await asyncio.sleep(1)
@@ -89,7 +88,7 @@ async def handle_connection(reader, writer):
                 #     print(f"LAST: {str(last_k)}")
                 writer.write(data_to_send.encode())
                 await writer.drain()
-            except ConnectionError:
+            except (ConnectionError, OSError):
                 print("Disconnect during sending")
                 del clients[adr]
                 break
@@ -107,7 +106,8 @@ async def handle_connection(reader, writer):
                 filename = f"{PATH}\\{point_number:02}_{dt.year:04}_{dt.month:02}_{dt.day:02}.csv"
                 if not os.path.isfile(filename):
                     with open(filename, mode="w") as file:
-                        file.write("Объект; Дата; Время; Напряжение; Ток-1; Ток-2; Широта; Долгота; Скорость; Расстояние\n")
+                        file.write(
+                            "Объект; Дата; Время; Напряжение; Ток-1; Ток-2; Широта; Долгота; Скорость; Расстояние\n")
                 for message in received_msgs:
                     try:
                         message_str = message.decode()
