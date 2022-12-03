@@ -83,7 +83,7 @@ async def handle_connection(reader, writer):
                 #             if key > last_k:
                 #                 last_k = key
                 #                 last_v = value
-                if clients[adr][0:3] == "Sta":
+                if clients[adr][0:6] != "Loco02":
                     data_to_send = sync_data
                 else:
                     data_to_send = sync_data[0:3] + \
