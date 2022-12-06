@@ -83,16 +83,17 @@ async def handle_connection(reader, writer):
                 #             if key > last_k:
                 #                 last_k = key
                 #                 last_v = value
-                if clients[adr][0:6] != "Loco02":
+                if clients[adr][0:3] == "Sta":
                     data_to_send = sync_data
                 else:
                     data_to_send = sync_data[0:3] + \
-                                   f" {vals[0][0]:6.0f} {vals[0][1]:6.2f} {vals[0][2]:6.2f}" + \
-                                   f" {vals[1][0]:6.0f} {vals[1][1]:6.2f} {vals[1][2]:6.2f}" + \
-                                   f" {vals[2][0]:6.0f} {vals[2][1]:6.2f} {vals[2][2]:6.2f}" + \
-                                   f" {vals[2][3]:6.0f} {vals[2][4]:6.2f} {vals[2][5]:6.4f} {vals[2][6]:6.4f}" + \
-                                   f" {vals[3][0]:6.0f} {vals[3][1]:6.2f} {vals[3][2]:6.2f}" + \
-                                   f" {vals[3][3]:6.0f} {vals[3][4]:6.2f} {vals[3][5]:6.2f} {vals[3][6]:6.4f} \r"
+                                   f" {vals[0][0]:1.0f} {vals[0][1]:1.2f} {vals[0][2]:1.2f}" + \
+                                   f" {vals[1][0]:1.0f} {vals[1][1]:1.2f} {vals[1][2]:1.2f}" + \
+                                   f" {vals[2][0]:1.0f} {vals[2][1]:1.2f} {vals[2][2]:1.2f}" + \
+                                   f" {vals[2][3]:1.0f} {vals[2][4]:1.2f} {vals[2][5]:1.4f} {vals[2][6]:1.4f}" + \
+                                   f" {vals[3][0]:1.0f} {vals[3][1]:1.2f} {vals[3][2]:1.2f}" + \
+                                   f" {vals[3][3]:1.0f} {vals[3][4]:1.2f} {vals[3][5]:1.2f} {vals[3][6]:1.4f} \r"
+                    print(data_to_send)
                 # if last_k is not None:
                 #     data_to_send += last_v["Sta01"] + last_v["Sta02"] + last_v["Loco01"] + last_v["Loco02"]
                 #     print(f"LAST: {str(last_k)}")
@@ -135,6 +136,9 @@ async def handle_connection(reader, writer):
                             point = 3
                         if point <= 1:
                             vals[point] = [float(message_vals[3]), float(message_vals[4]), float(message_vals[5])]
+                        # elif point == 2:
+                        #     vals[point] = [float(message_vals[3]), float(message_vals[4]), float(message_vals[5]),
+                        #                    float(message_vals[8]), 0, float(message_vals[6]), float(message_vals[7])]
                         else:
                             vals[point] = [float(message_vals[3]), float(message_vals[4]), float(message_vals[5]),
                                            float(message_vals[8]), float(message_vals[9]), float(message_vals[6]),
